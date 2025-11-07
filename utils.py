@@ -4,7 +4,7 @@ warnings.filterwarnings("ignore")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 class Logger:
-    def __init__(self, file_path, file_mode="a"):
+    def __init__(self, file_path, file_mode="w"):
         if not os.path.exists("/".join(file_path.split("/")[:-1])):
             os.mkdir("/".join(file_path.split("/")[:-1]))
             

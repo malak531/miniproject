@@ -10,27 +10,42 @@ class HumanVsMachineDataset:
         self.eos_token = eos_token
 
     def load_dataset(self, test_size=0.15, val_size=0.15, random_state=777):
-        # Load CSV
-        df = pd.read_csv(self.csv_path)
+      # Load CSV
+      df = pd.read_csv(self.csv_path)
 
-        # Check columns
-        assert "prompt" in df.columns and "label" in df.columns, \
-            "CSV must have columns named 'prompt' and 'label'"
+      # Ensure we have the required columns
+      assert "prompt" in df.columns and "label" in df.columns, \
+          "CSV must have columns named 'prompt' and 'label'"
 
-        # Train/val/test split
-        train_df, temp_df = train_test_split(df, test_size=test_size + val_size, random_state=random_state, stratify=df["label"])
-        val_df, test_df = train_test_split(temp_df, test_size=test_size / (test_size + val_size), random_state=random_state, stratify=temp_df["label"])
+      # Add unique ID for each row (so we can track later)
+      df["id"] = range(len(df))
 
-        # Convert to HF Datasets
-        train_ds = Dataset.from_pandas(train_df.reset_index(drop=True))
-        val_ds = Dataset.from_pandas(val_df.reset_index(drop=True))
-        test_ds = Dataset.from_pandas(test_df.reset_index(drop=True))
+      # Split into train/val/test
+      train_df, temp_df = train_test_split(
+          df,
+          test_size=test_size + val_size,
+          random_state=random_state,
+          stratify=df["label"]
+      )
 
-        return DatasetDict({
-            "train": train_ds,
-            "validation": val_ds,
-            "test": test_ds
-        })
+      val_df, test_df = train_test_split(
+          temp_df,
+          test_size=test_size / (test_size + val_size),
+          random_state=random_state,
+          stratify=temp_df["label"]
+      )
+
+      # Convert to HuggingFace datasets (keep the ID!)
+      train_ds = Dataset.from_pandas(train_df.reset_index(drop=True))
+      val_ds = Dataset.from_pandas(val_df.reset_index(drop=True))
+      test_ds = Dataset.from_pandas(test_df.reset_index(drop=True))
+
+      return DatasetDict({
+          "train": train_ds,
+          "validation": val_ds,
+          "test": test_ds
+      })
+
     
     def sample_few_shot_examples(self, k=3):
         df = pd.read_csv(self.csv_path)
@@ -43,14 +58,10 @@ class HumanVsMachineDataset:
             Adds Arabic prompts with optional few-shot examples.
             prompt_style: integer 1–5 selecting which question phrasing to use.
          """
-        prompt_variants = {
-            1: "هل النص التالي من إنتاج إنسان أم نموذج لغة كبير؟",
-            2: "هل كتب هذا النص شخص حقيقي أم تم توليده آليًا؟",
-            3: "اقرأ النص التالي وحدد ما إذا كان بشريًا أم مولدًا من قبل نموذج لغة.",
-            4: "تم جمع بعض النصوص من الإنترنت وبعضها من نماذج لغوية. صنّف النص التالي.",
-            5: "صِف النص التالي بأنه بشري أو مولد."
-        }
-        question = prompt_variants.get(prompt_style, prompt_variants[1])
+        question = (
+        "هل النص التالي من إنتاج إنسان أم نموذج لغة كبير؟ "
+        "أجب فقط بكلمة واحدة: 'بشري' أو 'آلة'. بدون شرح."
+    )
 
         examples_block = ""
         if few_shot_examples:
@@ -59,12 +70,20 @@ class HumanVsMachineDataset:
                 examples_block += f"النص: {text}\nالإجابة: {label}\n\n"
 
         def _format(example):
-            prompt = (
+            if test_mode:
+              prompt = (
+                  f"{examples_block}"
+                  f"{question}\n"
+                  f"النص: {example['prompt']}\n"
+                  f"الإجابة: <answer>"
+              )
+            else:
+                # training mode: include label for supervised fine-tuning
+                prompt = (
                     f"{examples_block}"
                     f"{question}\n"
                     f"النص: {example['prompt']}\n"
-                    f"الإجابة: <answer>{example['label'] if not test_mode else ''}</answer>"
-                    f"{self.eos_token}"
+                    f"الإجابة: <answer>{example['label']}</answer>"
                 )
             return {"text": prompt}
 
@@ -76,7 +95,8 @@ class HumanVsMachineDataset:
 if __name__ == "__main__":
     ds_builder = HumanVsMachineDataset("data/arabic_llm_detection.csv")
     ds = ds_builder.load_dataset()
-    formatted = ds_builder.format_for_training(ds)
+    formatted = ds_builder.format_for_training(ds, test_mode=True)
+
 
     print("✅ Dataset splits:", ds)
     print("📘 Example formatted text:\n", formatted["train"][0]["text"])

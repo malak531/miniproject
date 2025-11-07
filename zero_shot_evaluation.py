@@ -20,42 +20,41 @@ class EvalHumanVsMachine:
         self.eos_token = "<｜end▁of▁sentence｜>"
 
         # prediction folder name
-        self.preds_dir = os.path.join(preds_folder, f"{model_name}_human_vs_machine_{prompt_lang}")
+        self.preds_dir = os.path.join(preds_folder, f"{model_name.replace('/', '_')}_human_vs_machine_{prompt_lang}")
         self.scores_path = os.path.join(self.preds_dir, "scores.txt")
 
     def get_preds(self):
-        txt_files = sorted([f for f in os.listdir(self.preds_dir) if f.endswith(".txt") and f != "scores.txt"],
-                           key=lambda x: int(x.split('.')[0]))
+      txt_files = sorted([f for f in os.listdir(self.preds_dir) if f.endswith(".txt") and f != "scores.txt"],
+                        key=lambda x: int(x.split('.')[0]))
 
-        self.preds = []
-        self.answers = []
+      self.preds = []
+      self.answers = []
 
-        for f in txt_files:
-            with open(os.path.join(self.preds_dir, f), encoding="utf-8") as pred_file:
-                lines = pred_file.readlines()
+      for f in txt_files:
+        with open(os.path.join(self.preds_dir, f), encoding="utf-8") as pred_file:
+            text = pred_file.read()
 
-            # Find answer bounds
-            bounds = [i for i, line in enumerate(lines) if line.strip() == self.separator]
-            if len(bounds) < 2:
-                continue
-
-            gold = " ".join(lines[bounds[0]+1: bounds[1]]).strip()
-            self.answers.append(gold.replace("\n", ""))
-
-            pred_text = " ".join(lines[bounds[1]+1:]).strip()
-            # Extract only text after </think>, if present
-            think_match = re.search(r"</think>(.*)", pred_text, re.DOTALL)
-            if think_match:
-                pred_text = think_match.group(1).strip()
-
-            # Extract <answer>...</answer>
-            answer_match = re.search(r"<answer>(.*?)</answer>", pred_text, re.DOTALL)
-            pred = answer_match.group(1).strip() if answer_match else "<none>"
+        # Extract the gold label (from your test set filename order)
+        # Assuming ground truth is available in same order
+        # If your ground truth is in CSV, we’ll match it separately later.
+        answer_match = re.search(r"<answer>(.*?)</answer>", text, re.DOTALL)
+        if answer_match:
+            pred = answer_match.group(1).strip()
             self.preds.append(pred)
+        else:
+            self.preds.append("<none>")
+
+        # For now, we’ll load the gold label directly from your CSV later
+
 
     def classification(self):
         self.get_preds()
-        self.answers = self.answers[:len(self.preds)]
+
+        import pandas as pd
+        df = pd.read_csv("test_split.csv")
+        self.answers = df['label'].tolist()
+
+
 
         # Clean text
         self.preds = [p.replace(self.eos_token, "").replace("\n", "").strip() for p in self.preds]
@@ -64,11 +63,11 @@ class EvalHumanVsMachine:
         # Normalize possible variations of labels
         label_map = {
             "بشري": "بشري",
-            "مولد": "مولد",
+            "آلة": "آلة",
             "human": "بشري",
-            "machine": "مولد",
+            "machine": "آلة",
             "Human": "بشري",
-            "Machine": "مولد"
+            "Machine": "آلة"
         }
         self.preds = [label_map.get(p, p) for p in self.preds]
         self.answers = [label_map.get(a, a) for a in self.answers]

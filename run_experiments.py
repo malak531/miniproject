@@ -3,19 +3,22 @@ import os
 from dataset2 import HumanVsMachineDataset
 from zero_shot_inference import ZS_Inference
 from zero_shot_evaluation import EvalHumanVsMachine as Eval
+from transformers import AutoTokenizer, AutoModelForCausalLM
+
 
 class Args:
     """Unified argument holder"""
     def __init__(
         self,
-        model="meta-llama/Llama-3.1-8B-Instruct",
+        model="Qwen/Qwen2.5-1.5B-Instruct",
         csv_path="ground_truth.csv",
         prompt_style=1,
         shots=0,
         save_path="./zs_preds",
-        call_limit=50,
+        call_limit=720,
         prompt_lang="ar",
-        task="human_vs_machine"
+        task="human_vs_machine",
+        resume = False,
     ):
         self.model = model
         self.csv_path = csv_path
@@ -24,7 +27,8 @@ class Args:
         self.save_path = save_path
         self.call_limit = call_limit
         self.prompt_lang = prompt_lang
-        self.task = task
+        self.task = task,
+        self.resume = resume
 
 def main():
     # Step 1 — Load dataset
@@ -41,12 +45,11 @@ def main():
 
     # Step 3 — Run evaluation
     evaluator = Eval(
-        task=args.task,
         model_name=args.model,
         prompt_lang=args.prompt_lang,
         preds_folder=args.save_path
     )
-    results = evaluator.evaluate()
+    results = evaluator.classification()
 
     print("\n📊 Evaluation Results:")
     print(results)
