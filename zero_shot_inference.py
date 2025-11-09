@@ -52,7 +52,7 @@ class ZS_Inference:
         from transformers import AutoTokenizer, AutoModelForCausalLM
         import torch
         print(f" Loading model: {self.model_name}")
-        access_token = "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"
+#         access_token = "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"
 #         login("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")
 
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, use_fast=True,token=access_token)
