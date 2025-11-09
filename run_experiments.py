@@ -6,6 +6,8 @@ from zero_shot_evaluation import EvalHumanVsMachine as Eval
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
 
+
+
 class Args:
     """Unified argument holder"""
     def __init__(
@@ -13,8 +15,8 @@ class Args:
         model="Qwen/Qwen2.5-1.5B-Instruct",
         csv_path="ground_truth.csv",
         prompt_style=1,
-        shots=0,
-        save_path="./zs_preds",
+        shots=2,
+        save_path="./fs_preds2",
         call_limit=720,
         prompt_lang="ar",
         task="human_vs_machine",
@@ -35,7 +37,7 @@ def main():
     dataset_builder = HumanVsMachineDataset(csv_path="ground_truth.csv")
     dataset_dict = dataset_builder.load_dataset()
 
-    print(f"✅ Dataset loaded with {len(dataset_dict['train'])} training samples.")
+    print(f"Dataset loaded with {len(dataset_dict['train'])} training samples.")
 
     # Step 2 — Run zero-shot inference
     args = Args()
@@ -51,7 +53,7 @@ def main():
     )
     results = evaluator.classification()
 
-    print("\n📊 Evaluation Results:")
+    print("\nEvaluation Results:")
     print(results)
 
 if __name__ == "__main__":

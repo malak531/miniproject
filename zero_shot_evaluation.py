@@ -1,6 +1,9 @@
 import os
 import re
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+import pandas as pd
+import unicodedata
+
 
 # Optional helper if you want logs
 class Logger:
@@ -12,7 +15,7 @@ class Logger:
             f.write(text + "\n")
 
 class EvalHumanVsMachine:
-    def __init__(self, model_name="LLaMA3-3B", prompt_lang="ar", preds_folder="./zs_preds"):
+    def __init__(self, model_name="Qwen/Qwen2.5-1.5B-Instruct", prompt_lang=("ar",), preds_folder="./fs_preds2"):
         self.model_name = model_name
         self.prompt_lang = prompt_lang
         self.preds_folder = preds_folder
@@ -20,57 +23,86 @@ class EvalHumanVsMachine:
         self.eos_token = "<｜end▁of▁sentence｜>"
 
         # prediction folder name
-        self.preds_dir = os.path.join(preds_folder, f"{model_name.replace('/', '_')}_human_vs_machine_{prompt_lang}")
+        self.preds_dir = os.path.join(preds_folder, f"{model_name.replace('/', '_')}_human_vs_machine_{prompt_lang}")        
         self.scores_path = os.path.join(self.preds_dir, "scores.txt")
 
     def get_preds(self):
-      txt_files = sorted([f for f in os.listdir(self.preds_dir) if f.endswith(".txt") and f != "scores.txt"],
-                        key=lambda x: int(x.split('.')[0]))
+        txt_files = [
+            f for f in os.listdir(self.preds_dir)
+            if f.endswith(".txt") and f.split('.')[0].isdigit()
+        ]
+        txt_files = sorted(txt_files, key=lambda x: int(x.split('.')[0]))
 
-      self.preds = []
-      self.answers = []
+        self.preds = []
 
-      for f in txt_files:
-        with open(os.path.join(self.preds_dir, f), encoding="utf-8") as pred_file:
-            text = pred_file.read()
+        for f in txt_files:
+            path = os.path.join(self.preds_dir, f)
+            with open(path, encoding="utf-8") as file:
+                text = file.read()
 
-        # Extract the gold label (from your test set filename order)
-        # Assuming ground truth is available in same order
-        # If your ground truth is in CSV, we’ll match it separately later.
-        answer_match = re.search(r"<answer>(.*?)</answer>", text, re.DOTALL)
-        if answer_match:
-            pred = answer_match.group(1).strip()
+            pred = self.extract_answer(text)
             self.preds.append(pred)
-        else:
-            self.preds.append("<none>")
 
-        # For now, we’ll load the gold label directly from your CSV later
+    def extract_answer(self, text):
+        # 1) Try <answer>...</answer>
+        pattern = r"<\s*answer\s*>\s*(.*?)\s*<\s*/\s*answer\s*>"
+        matches = re.findall(pattern, text, re.IGNORECASE | re.DOTALL)
+        if matches:
+            return matches[-1].strip()
 
+        # 2) After 'الإجابة:'
+        if "الإجابة:" in text:
+            after = text.split("الإجابة:")[-1].strip()
+            for line in after.splitlines():
+                line = line.strip()
+                if line:
+                    return line
 
+        # 3) Fallback: last non-empty line
+        for line in reversed(text.splitlines()):
+            line = line.strip()
+            if line:
+                return line
+
+        return "<none>"
+
+    # ---------------- Normalize predictions and gold labels ----------------
+    def normalize_text(self, text):
+        if not isinstance(text, str):
+            return ""
+        text = unicodedata.normalize("NFKC", text)
+        # remove invisible chars but keep punctuation
+        text = text.replace("\u200f", "").replace("\u202c", "").replace("\xa0", " ").strip()
+        # remove common trailing punctuation
+        text = text.rstrip(".،!؟").strip()
+        # map English labels
+        mapping = {"human": "بشري", "Human": "بشري", "machine": "آلة", "Machine": "آلة"}
+        for k, v in mapping.items():
+            if text.lower() == k.lower():
+                return v
+        return text
+
+    # ---------------- Main classification method ----------------
     def classification(self):
         self.get_preds()
 
-        import pandas as pd
         df = pd.read_csv("test_split.csv")
         self.answers = df['label'].tolist()
 
+        # normalize both preds and answers
+        self.preds = [self.normalize_text(p) for p in self.preds]
+        self.answers = [self.normalize_text(a) for a in self.answers]
+
+        # debug file
+        debug_path = os.path.join(self.preds_dir, "debug_predictions.txt")
+        with open(debug_path, "w", encoding="utf-8") as f:
+            f.write("INDEX\tPREDICTION\tGOLD\n")
+            f.write("="*60 + "\n")
+            for i, (p, g) in enumerate(zip(self.preds, self.answers)):
+                f.write(f"{i}\t{repr(p)}\t{repr(g)}\n")
+        print(f"📝 Cleaned predictions saved to: {debug_path}")
 
 
-        # Clean text
-        self.preds = [p.replace(self.eos_token, "").replace("\n", "").strip() for p in self.preds]
-        self.answers = [a.replace(self.eos_token, "").replace("\n", "").strip() for a in self.answers]
-
-        # Normalize possible variations of labels
-        label_map = {
-            "بشري": "بشري",
-            "آلة": "آلة",
-            "human": "بشري",
-            "machine": "آلة",
-            "Human": "بشري",
-            "Machine": "آلة"
-        }
-        self.preds = [label_map.get(p, p) for p in self.preds]
-        self.answers = [label_map.get(a, a) for a in self.answers]
 
         return self.calculate_F1(self.preds, self.answers)
 
@@ -86,7 +118,7 @@ class EvalHumanVsMachine:
         logger(f"Recall: {rec:.4f}")
         logger(f"F1 Score: {f1:.4f}")
 
-        print("✅ Evaluation Results:")
+        print("Evaluation Results:")
         print(f"Accuracy: {acc:.4f}")
         print(f"Precision: {prec:.4f}")
         print(f"Recall: {rec:.4f}")
@@ -97,5 +129,5 @@ class EvalHumanVsMachine:
 
 if __name__ == "__main__":
     # Example usage
-    e = EvalHumanVsMachine(model_name="LLaMA3-3B", prompt_lang="ar", preds_folder="./zs_preds")
+    e = EvalHumanVsMachine(model_name="Qwen/Qwen2.5-1.5B-Instruct", prompt_lang=("ar",), preds_folder="./fs_preds2")
     e.classification()

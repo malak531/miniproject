@@ -12,6 +12,6 @@ class Logger:
         self.file_mode = file_mode
 
     def __call__(self, message):
-        with open(self.file_path, self.file_mode) as f:
+        with open(self.file_path, self.file_mode, encoding="utf-8") as f:
             f.write(f"{message}\n")
-            print(message)
+#             print(message)

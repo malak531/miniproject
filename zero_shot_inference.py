@@ -6,7 +6,10 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from dataset2 import HumanVsMachineDataset
 from utils import Logger
 from huggingface_hub import login
+from peft import PeftModel
 
+
+# login("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")
 
 class ZS_Inference:
     def __init__(self, args):
@@ -17,7 +20,8 @@ class ZS_Inference:
         self.save_path = args.save_path
         self.call_limit = args.call_limit
         self.resume = args.resume
-        self.prompt_lang = getattr(args, "prompt_lang", "ar")  # default to "ar" if missing
+        self.prompt_lang = getattr(args, "prompt_lang", "ar"),
+        #self.lora_path = args.lora_path
 
         # ----- DEVICE SELECTION -----
         if torch.backends.mps.is_available():
@@ -43,38 +47,58 @@ class ZS_Inference:
     # ------------------------------------------------------------
     # Load model with MPS/CPU safe options
     # ------------------------------------------------------------
+# inside ZS_Inference class
     def load_model(self):
-     
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+        import torch
+        print(f" Loading model: {self.model_name}")
+        access_token = "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"
+#         login("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")
 
-        print(f"🦙 Loading model: {self.model_name}")
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, use_fast=True,token=access_token)
 
-        # Use low_cpu_mem_usage to reduce RAM spikes
-        # Avoid float16 on CPU
-        dtype = torch.float16 if self.device.type == "mps" else torch.float32
+        # Determine dtype for GPU
+        dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+
+        # Some models (Qwen, InternLM, etc.) require trust_remote_code=True
+        trust_remote_code = any(x in self.model_name.lower() for x in ["qwen", "internlm"])
+
 
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
-            device_map=None,  # manual device placement
-            low_cpu_mem_usage=True,
-            torch_dtype=dtype,
+            trust_remote_code = True,
+            device_map = "auto",
+            dtype=torch.float16 if torch.cuda.is_available() else torch.float32, 
+            token=access_token
         )
 
-        # Move model to the selected device
+
+        # Move to GPU explicitly if device_map didn't already do it
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        # If a LoRA adapter path is provided, load it
+#         if self.lora_path:
+#             print(f"Loading LoRA adapter from {self.lora_path}")
+#             self.model = PeftModel.from_pretrained(self.model, self.lora_path)
+
+        # Move to the selected device
         self.model.to(self.device)
-        print(f"✅ Model loaded on {self.device}")
+        self.model.eval()
+
+        print(f"Model loaded on device: {self.device}")
+
 
     # ------------------------------------------------------------
     # Load dataset & format prompts
     # ------------------------------------------------------------
     def load_data(self):
-        print("📘 Loading dataset...")
+        print("Loading dataset...")
         ds_builder = HumanVsMachineDataset(self.csv_path)
         ds = ds_builder.load_dataset()
 
         few_shots = None
         if self.shots > 0:
-            few_shots = ds_builder.sample_few_shot_examples(k=self.shots)
+            few_shots = ds_builder.sample_few_shot_examples(ds['train'], k=self.shots)
 
         formatted = ds_builder.format_for_training(
             ds,
@@ -82,36 +106,56 @@ class ZS_Inference:
             prompt_style=self.prompt_style,
             test_mode=True,
         )
-        self.dataset = formatted["test"]
+#         self.dataset = formatted["test"]
+#         self.dataset_size = len(self.dataset)
+#         print(f"Loaded {self.dataset_size} samples for inference.")
+#         # 💾 Save test dataset to a CSV file for evaluation alignment
+#         import pandas as pd
+#         test_df = self.dataset.to_pandas() if hasattr(self.dataset, "to_pandas") else pd.DataFrame(self.dataset)
+#         test_df.to_csv("test_split.csv", index=False)
+        
+        
+        
+        self.dataset = formatted["validation"]
         self.dataset_size = len(self.dataset)
-        print(f"✅ Loaded {self.dataset_size} samples for inference.")
+        print(f"Loaded {self.dataset_size} samples for inference.")
         # 💾 Save test dataset to a CSV file for evaluation alignment
         import pandas as pd
         test_df = self.dataset.to_pandas() if hasattr(self.dataset, "to_pandas") else pd.DataFrame(self.dataset)
         test_df.to_csv("test_split.csv", index=False)
-        print("💾 Saved test split to test_split.csv for evaluation consistency.")
+        
+        print("Saved test split to test_split.csv for evaluation consistency.")
 
 
     # ------------------------------------------------------------
     # Run inference locally and save predictions
     # ------------------------------------------------------------
     def run_inference(self):
-        print("🚀 Starting zero-shot / few-shot inference...")
+        print("Starting zero-shot / few-shot inference...")
         start_idx = 0
         if self.resume and os.path.exists(self.preds_file_path):
             start_idx = len(os.listdir(self.preds_file_path))
-            print(f"🔄 Resuming from index {start_idx}")
+            print(f"Resuming from index {start_idx}")
 
         for i in tqdm(range(start_idx, min(self.dataset_size, self.call_limit))):
             example = self.dataset[i]
             prompt = example["text"]
 
             # Move inputs to the same device as model
+#             max_len = 2048  # for GPT-Neo 2.7B
+
+#             inputs = self.tokenizer(
+#                 prompt,
+#                 return_tensors="pt",
+#                 truncation=True,
+#                 max_length=max_len
+#             ).to(self.device)
             inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
 
             with torch.no_grad():
                 outputs = self.model.generate(
                     input_ids=inputs.input_ids,
+                    use_cache=False,
                     attention_mask=inputs.attention_mask,
                     max_new_tokens=32,
                     temperature=0.7,
@@ -131,7 +175,7 @@ class ZS_Inference:
             elif torch.backends.mps.is_available():
               torch.mps.empty_cache()
 
-        print(f"✅ Inference complete. Files saved to: {self.preds_file_path}")
+        print(f"Inference complete. Files saved to: {self.preds_file_path}")
 
 
 # ------------------------------------------------------------

@@ -1,0 +1,63 @@
+# run_experiments.py
+import os
+from dataset2 import HumanVsMachineDataset
+from zero_shot_inference import ZS_Inference
+from zero_shot_evaluation import EvalHumanVsMachine as Eval
+from transformers import AutoTokenizer, AutoModelForCausalLM
+
+
+
+
+class Args:
+    """Unified argument holder"""
+    def __init__(
+        self,
+        model="Qwen/Qwen2.5-1.5B-Instruct",
+        csv_path="ground_truth.csv",
+        prompt_style=1,
+        shots=0,
+        save_path="./ft_preds",
+        call_limit=720,
+        prompt_lang="ar",
+        task="human_vs_machine",
+        resume=False,
+        lora_path="./lora_qwen_tagged"  # <-- Add this
+    ):
+        self.model = model
+        self.csv_path = csv_path
+        self.prompt_style = prompt_style
+        self.shots = shots
+        self.save_path = save_path
+        self.call_limit = call_limit
+        self.prompt_lang = prompt_lang
+        self.task = task
+        self.resume = resume
+        self.lora_path = lora_path  # <-- Add this
+
+
+def main():
+    # Step 1 — Load dataset
+    dataset_builder = HumanVsMachineDataset(csv_path="ground_truth.csv")
+    dataset_dict = dataset_builder.load_dataset()
+
+    print(f"Dataset loaded with {len(dataset_dict['train'])} training samples.")
+
+    # Step 2 — Run zero-shot inference
+    args = Args()
+    inference = ZS_Inference(args)
+    inference.run_inference()
+
+
+    # Step 3 — Run evaluation
+    evaluator = Eval(
+        model_name=args.model,
+        prompt_lang=args.prompt_lang,
+        preds_folder=args.save_path
+    )
+    results = evaluator.classification()
+
+    print("\nEvaluation Results:")
+    print(results)
+
+if __name__ == "__main__":
+    main()
