@@ -12,11 +12,11 @@ class Args:
     """Unified argument holder"""
     def __init__(
         self,
-        model="Qwen/Qwen2.5-1.5B-Instruct",
+        model="meta-llama/Llama-3.2-3B",
         csv_path="ground_truth.csv",
         prompt_style=1,
-        shots=2,
-        save_path="./fs_preds2",
+        shots=0,
+        save_path="./zs_preds",
         call_limit=720,
         prompt_lang="ar",
         task="human_vs_machine",

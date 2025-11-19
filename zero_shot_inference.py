@@ -9,7 +9,6 @@ from huggingface_hub import login
 from peft import PeftModel
 
 
-# login("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")
 
 class ZS_Inference:
     def __init__(self, args):
@@ -20,8 +19,8 @@ class ZS_Inference:
         self.save_path = args.save_path
         self.call_limit = args.call_limit
         self.resume = args.resume
-        self.prompt_lang = getattr(args, "prompt_lang", "ar"),
-        #self.lora_path = args.lora_path
+        self.prompt_lang = "ar",
+        self.lora_path = args.lora_path
 
         # ----- DEVICE SELECTION -----
         if torch.backends.mps.is_available():
@@ -52,8 +51,7 @@ class ZS_Inference:
         from transformers import AutoTokenizer, AutoModelForCausalLM
         import torch
         print(f" Loading model: {self.model_name}")
-#         access_token = "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"
-#         login("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")
+        access_token = ""
 
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, use_fast=True,token=access_token)
 
@@ -77,9 +75,9 @@ class ZS_Inference:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         # If a LoRA adapter path is provided, load it
-#         if self.lora_path:
-#             print(f"Loading LoRA adapter from {self.lora_path}")
-#             self.model = PeftModel.from_pretrained(self.model, self.lora_path)
+        if self.lora_path:
+            print(f"Loading LoRA adapter from {self.lora_path}")
+            self.model = PeftModel.from_pretrained(self.model, self.lora_path)
 
         # Move to the selected device
         self.model.to(self.device)
@@ -106,23 +104,23 @@ class ZS_Inference:
             prompt_style=self.prompt_style,
             test_mode=True,
         )
-#         self.dataset = formatted["test"]
-#         self.dataset_size = len(self.dataset)
-#         print(f"Loaded {self.dataset_size} samples for inference.")
-#         # 💾 Save test dataset to a CSV file for evaluation alignment
-#         import pandas as pd
-#         test_df = self.dataset.to_pandas() if hasattr(self.dataset, "to_pandas") else pd.DataFrame(self.dataset)
-#         test_df.to_csv("test_split.csv", index=False)
-        
-        
-        
-        self.dataset = formatted["validation"]
+        self.dataset = formatted["test"]
         self.dataset_size = len(self.dataset)
         print(f"Loaded {self.dataset_size} samples for inference.")
         # 💾 Save test dataset to a CSV file for evaluation alignment
         import pandas as pd
         test_df = self.dataset.to_pandas() if hasattr(self.dataset, "to_pandas") else pd.DataFrame(self.dataset)
         test_df.to_csv("test_split.csv", index=False)
+        
+        
+        
+#         self.dataset = formatted["validation"]
+#         self.dataset_size = len(self.dataset)
+#         print(f"Loaded {self.dataset_size} samples for validation.")
+#         # 💾 Save test dataset to a CSV file for evaluation alignment
+#         import pandas as pd
+#         test_df = self.dataset.to_pandas() if hasattr(self.dataset, "to_pandas") else pd.DataFrame(self.dataset)
+#         test_df.to_csv("test_split.csv", index=False)
         
         print("Saved test split to test_split.csv for evaluation consistency.")
 

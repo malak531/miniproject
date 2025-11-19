@@ -15,15 +15,15 @@ class Logger:
             f.write(text + "\n")
 
 class EvalHumanVsMachine:
-    def __init__(self, model_name="Qwen/Qwen2.5-1.5B-Instruct", prompt_lang=("ar",), preds_folder="./fs_preds2"):
+    def __init__(self, model_name="Qwen/Qwen2.5-1.5B-Instruct", prompt_lang="ar", preds_folder="./ft_preds"):
         self.model_name = model_name
-        self.prompt_lang = prompt_lang
+        self.prompt_lang = "ar"
         self.preds_folder = preds_folder
         self.separator = "================================================================================="
         self.eos_token = "<｜end▁of▁sentence｜>"
 
         # prediction folder name
-        self.preds_dir = os.path.join(preds_folder, f"{model_name.replace('/', '_')}_human_vs_machine_{prompt_lang}")        
+        self.preds_dir = os.path.join(preds_folder, f"{model_name.replace('/', '_')}_human_vs_machine_ar")
         self.scores_path = os.path.join(self.preds_dir, "scores.txt")
 
     def get_preds(self):
@@ -81,6 +81,15 @@ class EvalHumanVsMachine:
             if text.lower() == k.lower():
                 return v
         return text
+    
+    def map_to_numeric(self, text):
+        text = self.normalize_text(text)
+        if "بشري" in text:
+            return 0
+        elif "آلة" in text:
+            return 1
+        else:
+            return -1  # unknown or invalid
 
     # ---------------- Main classification method ----------------
     def classification(self):
@@ -92,6 +101,16 @@ class EvalHumanVsMachine:
         # normalize both preds and answers
         self.preds = [self.normalize_text(p) for p in self.preds]
         self.answers = [self.normalize_text(a) for a in self.answers]
+
+        # convert to numeric
+        self.preds = [self.map_to_numeric(p) for p in self.preds]
+        self.answers = [self.map_to_numeric(a) for a in self.answers]
+
+        # remove invalid samples
+        valid_indices = [i for i, (p, a) in enumerate(zip(self.preds, self.answers)) if p != -1 and a != -1]
+        self.preds = [self.preds[i] for i in valid_indices]
+        self.answers = [self.answers[i] for i in valid_indices]
+
 
         # debug file
         debug_path = os.path.join(self.preds_dir, "debug_predictions.txt")
@@ -129,5 +148,5 @@ class EvalHumanVsMachine:
 
 if __name__ == "__main__":
     # Example usage
-    e = EvalHumanVsMachine(model_name="Qwen/Qwen2.5-1.5B-Instruct", prompt_lang=("ar",), preds_folder="./fs_preds2")
+    e = EvalHumanVsMachine(model_name="Qwen/Qwen2.5-1.5B-Instruct", prompt_lang="ar",preds_folder="./ft_preds")
     e.classification()

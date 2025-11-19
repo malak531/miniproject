@@ -54,7 +54,7 @@ class HumanVsMachineDataset:
         Sample k few-shot examples from the given dataset split (e.g., 'train').
         """
         df = dataset_split.to_pandas()  # Convert HuggingFace dataset to pandas
-        samples = df.sample(n=k, random_state=777)
+        samples = df.sample(n=k, random_state=779)
         return list(zip(samples['prompt'], samples['label']))
 
 

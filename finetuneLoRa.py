@@ -5,11 +5,11 @@ from datasets import DatasetDict
 from dataset2 import HumanVsMachineDataset  # your updated dataset class
 
 # ---- SETTINGS ----
-MODEL_NAME = "Qwen/Qwen2.5-1.5B-Instruct"
-OUTPUT_DIR = "./lora_qwen_tagged"
+MODEL_NAME = "HuggingFaceTB/SmolLM3-3B"
+OUTPUT_DIR = "./lora_smoil_tagged"
 CSV_PATH = "ground_truth.csv"
 MAX_LEN = 512
-
+access_token = "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"
 # ---- LOAD DATA ----
 builder = HumanVsMachineDataset(CSV_PATH)
 dataset_dict = builder.load_dataset()
@@ -19,7 +19,7 @@ train_ds = formatted["train"]
 val_ds = formatted["validation"]
 
 # ---- TOKENIZER ----
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, use_fast=True)
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, use_fast=True, token=access_token)
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
 
@@ -70,14 +70,14 @@ def tokenize_fn(example):
         attention_mask.append(0)
         labels.append(-100)
         
-    print("=== DEBUG ===")
-    print("Prompt length:", len(prompt_enc["input_ids"]))
-    print("Answer text:", label_text)
-    print("Answer token ids:", label_ids)
-    print("Labels (last 10):", labels[-10:])
-    print("Input IDs (last 10):", input_ids[-10:])
-    print("Attention mask (last 10):", attention_mask[-10:])
-    print("================")
+#     print("=== DEBUG ===")
+#     print("Prompt length:", len(prompt_enc["input_ids"]))
+#     print("Answer text:", label_text)
+#     print("Answer token ids:", label_ids)
+#     print("Labels (last 10):", labels[-10:])
+#     print("Input IDs (last 10):", input_ids[-10:])
+#     print("Attention mask (last 10):", attention_mask[-10:])
+#     print("================")
 
     return {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels}
 
@@ -92,6 +92,7 @@ model = AutoModelForCausalLM.from_pretrained(
     MODEL_NAME,
     load_in_4bit=True,
     device_map="auto",
+    token = access_token
 )
 model = prepare_model_for_kbit_training(model)
 
@@ -112,7 +113,7 @@ training_args = TrainingArguments(
     per_device_eval_batch_size=2,
     gradient_accumulation_steps=4,
     warmup_steps=20,
-    num_train_epochs=1,
+    num_train_epochs=2,
     learning_rate=1e-5,  # lower LR for safety
     logging_steps=10,
     save_strategy="steps",

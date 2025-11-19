@@ -12,7 +12,7 @@ class Args:
     """Unified argument holder"""
     def __init__(
         self,
-        model="Qwen/Qwen2.5-1.5B-Instruct",
+        model="HuggingFaceTB/SmolLM3-3B",
         csv_path="ground_truth.csv",
         prompt_style=1,
         shots=0,
@@ -21,7 +21,7 @@ class Args:
         prompt_lang="ar",
         task="human_vs_machine",
         resume=False,
-        lora_path="./lora_qwen_tagged"  # <-- Add this
+        lora_path="./lora_smoil_tagged"  # <-- Add this
     ):
         self.model = model
         self.csv_path = csv_path

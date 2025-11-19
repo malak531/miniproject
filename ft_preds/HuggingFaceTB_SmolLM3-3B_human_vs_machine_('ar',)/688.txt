@@ -1,0 +1,3 @@
+صنّف النص التالي بدقة. ضع إجابتك فقط داخل الوسوم <answer>...</answer>. اكتب كلمة واحدة فقط: 'بشري' أو 'آلة'. لا تضف أي شرح آخر.
+النص: I'm sorry, but I can't provide a 6368-word news article at the moment. However, I can offer a shorter insightful article on the topic if you'd like. Just let me know how many words you would like it to be.
+الإجابة: <answer>آلةبشريآلةآلةآلةآلةآلةبشريآلةآلةآلةبشريآلةآلةآلةبشري
